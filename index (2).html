@@ -1,0 +1,694 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Desafio de História</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: linear-gradient(135deg, #74ebd5, #acb6e5);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      background-image: url('https://www.transparenttextures.com/patterns/old-wall.png');
+      background-blend-mode: overlay;
+    }
+    #game-container {
+      background: linear-gradient(145deg, #ffffff, #e6e6e6);
+      padding: 30px;
+      border-radius: 15px;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+      text-align: center;
+      width: 90%;
+      max-width: 650px;
+      border: 2px solid #3498db;
+    }
+    h1 {
+      color: #2c3e50;
+      font-size: 28px;
+      text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
+    }
+    button {
+      background: linear-gradient(to right, #3498db, #2980b9);
+      color: white;
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      margin: 10px;
+      font-size: 16px;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    button:hover {
+      transform: scale(1.05);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+    .option {
+      background: linear-gradient(to right, #ecf0f1, #dfe6e9);
+      margin: 10px;
+      padding: 15px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background-color 0.3s, transform 0.2s;
+      border: 1px solid #bdc3c7;
+    }
+    .option:hover {
+      background: linear-gradient(to right, #dfe6e9, #b2bec3);
+      transform: scale(1.02);
+    }
+    .option.selected {
+      background: linear-gradient(to right, #3498db, #2980b9);
+      color: white;
+      border: 1px solid #2c3e50;
+    }
+    #feedback {
+      font-size: 18px;
+      margin: 15px 0;
+      font-weight: bold;
+    }
+    #timer {
+      font-size: 18px;
+      color: #e74c3c;
+      font-weight: bold;
+      background: rgba(255, 255, 255, 0.8);
+      padding: 5px 10px;
+      border-radius: 5px;
+      display: inline-block;
+    }
+    #teacher-dashboard {
+      display: none;
+      background: linear-gradient(145deg, #ffffff, #e6e6e6);
+      padding: 30px;
+      border-radius: 15px;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+      width: 90%;
+      max-width: 800px;
+      text-align: left;
+      border: 2px solid #e74c3c;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+      background: #fff;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 12px;
+      text-align: left;
+    }
+    th {
+      background: linear-gradient(to right, #e74c3c, #c0392b);
+      color: white;
+      cursor: pointer;
+    }
+    th:hover {
+      background: linear-gradient(to right, #c0392b, #e74c3c);
+    }
+    td {
+      background: rgba(255, 255, 255, 0.9);
+    }
+    input[type="text"], input[type="password"] {
+      padding: 10px;
+      margin: 10px;
+      border-radius: 8px;
+      border: 1px solid #3498db;
+      width: 220px;
+      font-size: 14px;
+      background: #f9f9f9;
+    }
+    .toggle-column {
+      background: linear-gradient(to right, #2ecc71, #27ae60);
+      margin: 5px;
+      padding: 8px 16px;
+    }
+    .toggle-column:hover {
+      background: linear-gradient(to right, #27ae60, #2ecc71);
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <h1>Desafio de História: Classe Social, Revolução e Iluminismo!</h1>
+    <div id="start-screen">
+      <label for="player-name">Nome do Aluno ou Equipe:</label><br>
+      <input type="text" id="player-name" placeholder="Digite seu nome ou equipe"><br>
+      <button onclick="startGame()">Iniciar Jogo</button><br>
+      <label for="teacher-password">Senha do Professor:</label><br>
+      <input type="password" id="teacher-password" placeholder="Digite a senha"><br>
+      <button onclick="checkTeacherPassword()">Ver Resultados (Professor)</button>
+    </div>
+    <div id="quiz-screen" style="display: none;">
+      <div id="timer">Tempo restante: 60s</div>
+      <h2 id="question"></h2>
+      <div id="options"></div>
+      <button id="confirm-button" style="display: none;" onclick="confirmAnswer()">Confirmar Resposta</button>
+      <div id="feedback"></div>
+    </div>
+    <div id="end-screen" style="display: none;">
+      <h2>Resultado Final</h2>
+      <p id="score"></p>
+      <button onclick="restartGame()">Jogar Novamente</button>
+      <button onclick="backToStart()">Voltar ao Início</button>
+    </div>
+  </div>
+  <div id="teacher-dashboard" style="display: none;">
+    <h1>Painel do Professor</h1>
+    <div>
+      <button class="toggle-column" onclick="toggleColumn('name')">Ocultar/Mostrar Nome</button>
+      <button class="toggle-column" onclick="toggleColumn('correct')">Ocultar/Mostrar Acertos</button>
+      <button class="toggle-column" onclick="toggleColumn('score')">Ocultar/Mostrar Pontuação</button>
+      <button class="toggle-column" onclick="toggleColumn('time')">Ocultar/Mostrar Tempo</button>
+      <button class="toggle-column" onclick="toggleColumn('errors')">Ocultar/Mostrar Erros</button>
+      <button onclick="sortByScore()">Ordenar por Pontuação</button>
+    </div>
+    <table id="results-table">
+      <thead>
+        <tr>
+          <th class="name">Aluno/Equipe</th>
+          <th class="correct">Acertos</th>
+          <th class="score">Pontuação (0-10)</th>
+          <th class="time">Tempo Total (s)</th>
+          <th class="errors">Erros por Questão</th>
+        </tr>
+      </thead>
+      <tbody id="results-body"></tbody>
+    </table>
+    <button onclick="backToStart()">Voltar ao Início</button>
+  </div>
+
+  <script>
+    const questions = [
+      {
+        question: "O que caracterizava a nobreza durante o Antigo Regime?",
+        options: [
+          "Eram ricos comerciantes.",
+          "Tinham privilégios como isenção de impostos.",
+          "Eram responsáveis pela produção de alimentos.",
+          "Trabalhavam em fábricas."
+        ],
+        correct: 1
+      },
+      {
+        question: "Qual foi a principal característica da Revolução Industrial?",
+        options: [
+          "A produção manual foi substituída por máquinas.",
+          "O comércio entre países foi proibido.",
+          "As monarquias foram abolidas em todo o mundo.",
+          "O feudalismo foi restaurado."
+        ],
+        correct: 0
+      },
+      {
+        question: "O que foi o Iluminismo?",
+        options: [
+          "Um movimento que defendia o absolutismo.",
+          "A ideia de que a razão humana poderia melhorar a sociedade.",
+          "Um sistema de governo baseado em divindades.",
+          "A oposição ao sistema capitalista."
+        ],
+        correct: 1
+      },
+      {
+        question: "Quando a Família Real Portuguesa chegou ao Brasil, o que isso provocou?",
+        options: [
+          "O aumento da produção agrícola no país.",
+          "A vinda de muitas pessoas para o Brasil, além de mudanças políticas e sociais.",
+          "A independência do Brasil foi proclamada imediatamente.",
+          "Não houve grandes mudanças no Brasil com a chegada da Família Real."
+        ],
+        correct: 1
+      },
+      {
+        question: "Quem fazia parte do clero no Antigo Regime?",
+        options: [
+          "Trabalhadores rurais.",
+          "Líderes religiosos, como padres e bispos.",
+          "Comerciantes e artesãos.",
+          "Nobres com títulos reais."
+        ],
+        correct: 1
+      },
+      {
+        question: "O que eram os plebeus na sociedade feudal?",
+        options: [
+          "Pessoas sem privilégios, como camponeses e trabalhadores.",
+          "Líderes políticos das cidades.",
+          "Comerciantes ricos.",
+          "Membros da família real."
+        ],
+        correct: 0
+      },
+      {
+        question: "Qual era o papel da burguesia no final do feudalismo?",
+        options: [
+          "Produzir alimentos no campo.",
+          "Controlar o exército real.",
+          "Comerciar e acumular riquezas nas cidades.",
+          "Governar como reis."
+        ],
+        correct: 2
+      },
+      {
+        question: "O que os trabalhadores faziam durante a Revolução Industrial?",
+        options: [
+          "Operavam máquinas nas fábricas.",
+          "Governaram os países.",
+          "Produziam leis no parlamento.",
+          "Controlavam o comércio internacional."
+        ],
+        correct: 0
+      },
+      {
+        question: "Qual invenção foi essencial para a Revolução Industrial?",
+        options: [
+          "A roda.",
+          "A máquina a vapor.",
+          "A imprensa.",
+          "O telescópio."
+        ],
+        correct: 1
+      },
+      {
+        question: "O que mudou nas cidades durante a Revolução Industrial?",
+        options: [
+          "As cidades diminuíram de tamanho.",
+          "Houve aumento da população urbana e das fábricas.",
+          "As cidades voltaram ao sistema feudal.",
+          "O comércio foi proibido nas cidades."
+        ],
+        correct: 1
+      },
+      {
+        question: "Qual pensador iluminista defendia a separação dos poderes?",
+        options: [
+          "Voltaire.",
+          "Rousseau.",
+          "Montesquieu.",
+          "Diderot."
+        ],
+        correct: 2
+      },
+      {
+        question: "O que o Iluminismo questionava?",
+        options: [
+          "A autoridade absoluta dos reis e da Igreja.",
+          "O uso de máquinas nas fábricas.",
+          "O comércio internacional.",
+          "A agricultura feudal."
+        ],
+        correct: 0
+      },
+      {
+        question: "Por que a Família Real Portuguesa veio ao Brasil em 1808?",
+        options: [
+          "Para explorar novas terras.",
+          "Para fugir das invasões napoleônicas.",
+          "Para iniciar a independência do Brasil.",
+          "Para aumentar a produção de café."
+        ],
+        correct: 1
+      },
+      {
+        question: "Qual foi uma consequência da chegada da Família Real ao Brasil?",
+        options: [
+          "A abertura dos portos brasileiros ao comércio internacional.",
+          "O fim da escravidão no Brasil.",
+          "A proibição de fábricas no Brasil.",
+          "A volta do feudalismo."
+        ],
+        correct: 0
+      },
+      {
+        question: "Quem pagava mais impostos no Antigo Regime?",
+        options: [
+          "A nobreza.",
+          "O clero.",
+          "Os plebeus.",
+          "Os reis."
+        ],
+        correct: 2
+      },
+      {
+        question: "O que caracterizava o trabalho nas fábricas durante a Revolução Industrial?",
+        options: [
+          "Jornadas longas e condições difíceis.",
+          "Trabalho manual sem máquinas.",
+          "Altos salários para todos.",
+          "Produção apenas para o rei."
+        ],
+        correct: 0
+      },
+      {
+        question: "Qual ideia iluminista influenciou revoluções como a Francesa?",
+        options: [
+          "A defesa do feudalismo.",
+          "A igualdade entre as pessoas.",
+          "O retorno à monarquia absoluta.",
+          "A proibição do comércio."
+        ],
+        correct: 1
+      },
+      {
+        question: "O que foi a abertura dos portos no Brasil em 1808?",
+        options: [
+          "A permissão para o comércio com outros países.",
+          "A construção de novos portos.",
+          "A proibição do comércio marítimo.",
+          "A independência dos portos brasileiros."
+        ],
+        correct: 0
+      },
+      {
+        question: "Quem eram os servos no feudalismo?",
+        options: [
+          "Comerciantes ricos.",
+          "Camponeses presos à terra dos nobres.",
+          "Líderes religiosos.",
+          "Soldados do rei."
+        ],
+        correct: 1
+      },
+      {
+        question: "Qual era o principal meio de transporte na Revolução Industrial?",
+        options: [
+          "Carroças puxadas por cavalos.",
+          "Ferrovias movidas a vapor.",
+          "Navios a vela.",
+          "Carros movidos a eletricidade."
+        ],
+        correct: 1
+      },
+      {
+        question: "Qual pensador iluminista escreveu 'O Contrato Social'?",
+        options: [
+          "Voltaire.",
+          "Rousseau.",
+          "Locke.",
+          "Diderot."
+        ],
+        correct: 1
+      },
+      {
+        question: "O que a chegada da Família Real trouxe para o Rio de Janeiro?",
+        options: [
+          "A construção de escolas e bibliotecas.",
+          "O retorno ao feudalismo.",
+          "A proibição do comércio.",
+          "A redução da população."
+        ],
+        correct: 0
+      },
+      {
+        question: "Qual era o papel dos comerciantes na sociedade feudal?",
+        options: [
+          "Governar as cidades.",
+          "Produzir alimentos.",
+          "Trocar bens e acumular riquezas.",
+          "Liderar o exército."
+        ],
+        correct: 2
+      },
+      {
+        question: "O que a Revolução Industrial trouxe para os trabalhadores?",
+        options: [
+          "Melhores condições de vida para todos.",
+          "Novas oportunidades, mas também exploração nas fábricas.",
+          "O fim do trabalho manual.",
+          "A proibição de trabalhar em fábricas."
+        ],
+        correct: 1
+      },
+      {
+        question: "O que os iluministas defendiam sobre o governo?",
+        options: [
+          "Que o rei deveria ter poder absoluto.",
+          "Que o povo deveria participar das decisões.",
+          "Que apenas a nobreza deveria governar.",
+          "Que a Igreja deveria controlar o governo."
+        ],
+        correct: 1
+      },
+      {
+        question: "Qual foi o impacto da chegada da Família Real na cultura brasileira?",
+        options: [
+          "A introdução de novas ideias e instituições culturais.",
+          "A proibição de escolas no Brasil.",
+          "O fim do comércio cultural.",
+          "A volta ao sistema feudal."
+        ],
+        correct: 0
+      },
+      {
+        question: "Quem controlava as terras no feudalismo?",
+        options: [
+          "Os plebeus.",
+          "Os nobres.",
+          "Os comerciantes.",
+          "Os trabalhadores."
+        ],
+        correct: 1
+      },
+      {
+        question: "O que mudou com a Revolução Industrial no campo?",
+        options: [
+          "A agricultura voltou ao feudalismo.",
+          "Novas máquinas agrícolas aumentaram a produção.",
+          "A produção agrícola parou completamente.",
+          "Os camponeses passaram a governar."
+        ],
+        correct: 1
+      },
+      {
+        question: "Qual ideia iluminista está na base da Declaração de Independência dos EUA?",
+        options: [
+          "A defesa do absolutismo.",
+          "Os direitos naturais, como liberdade e igualdade.",
+          "A volta ao feudalismo.",
+          "O controle da Igreja sobre o governo."
+        ],
+        correct: 1
+      },
+      {
+        question: "O que foi o Banco do Brasil, criado após a chegada da Família Real?",
+        options: [
+          "Uma instituição para financiar o comércio e a economia.",
+          "Um banco para guardar ouro dos nobres.",
+          "Uma escola para ensinar economia.",
+          "Um órgão para proibir o comércio."
+        ],
+        correct: 0
+      }
+    ];
+
+    let currentQuestion = 0;
+    let score = 0;
+    let timer;
+    let timeLeft = 60;
+    let playerName = "";
+    let selectedOption = -1;
+    let playerResults = JSON.parse(localStorage.getItem('playerResults')) || [];
+    let startTime;
+    const teacherPassword = "daviaires";
+    let columnVisibility = {
+      name: true,
+      correct: true,
+      score: true,
+      time: true,
+      errors: true
+    };
+
+    function startGame() {
+      playerName = document.getElementById('player-name').value.trim();
+      if (!playerName) {
+        alert("Por favor, insira o nome do aluno ou equipe.");
+        return;
+      }
+      currentQuestion = 0;
+      score = 0;
+      startTime = Date.now();
+      document.getElementById('start-screen').style.display = 'none';
+      document.getElementById('quiz-screen').style.display = 'block';
+      loadQuestion();
+    }
+
+    function loadQuestion() {
+      const q = questions[currentQuestion];
+      document.getElementById('question').textContent = q.question;
+      const optionsDiv = document.getElementById('options');
+      optionsDiv.innerHTML = '';
+      q.options.forEach((option, index) => {
+        const button = document.createElement('div');
+        button.className = 'option';
+        button.textContent = option;
+        button.onclick = () => selectOption(index);
+        optionsDiv.appendChild(button);
+      });
+      selectedOption = -1;
+      document.getElementById('confirm-button').style.display = 'none';
+      timeLeft = 60;
+      document.getElementById('timer').textContent = `Tempo restante: ${timeLeft}s`;
+      clearInterval(timer);
+      timer = setInterval(updateTimer, 1000);
+    }
+
+    function updateTimer() {
+      timeLeft--;
+      document.getElementById('timer').textContent = `Tempo restante: ${timeLeft}s`;
+      if (timeLeft <= 0) {
+        clearInterval(timer);
+        confirmAnswer();
+      }
+    }
+
+    function selectOption(index) {
+      selectedOption = index;
+      const options = document.getElementsByClassName('option');
+      for (let i = 0; i < options.length; i++) {
+        options[i].classList.remove('selected');
+      }
+      options[index].classList.add('selected');
+      document.getElementById('confirm-button').style.display = 'block';
+    }
+
+    function confirmAnswer() {
+      clearInterval(timer);
+      const feedback = document.getElementById('feedback');
+      const isCorrect = selectedOption === questions[currentQuestion].correct;
+      feedback.textContent = isCorrect ? "Correto!" : "Errado!";
+      feedback.style.color = isCorrect ? '#2ecc71' : '#e74c3c';
+      if (isCorrect) score += 10;
+
+      setTimeout(() => {
+        feedback.textContent = '';
+        currentQuestion++;
+        if (currentQuestion < questions.length) {
+          loadQuestion();
+        } else {
+          endGame();
+        }
+      }, 1000);
+    }
+
+    function endGame() {
+      const totalTime = Math.round((Date.now() - startTime) / 1000);
+      document.getElementById('quiz-screen').style.display = 'none';
+      document.getElementById('end-screen').style.display = 'block';
+      document.getElementById('score').textContent = `Você acertou ${score / 10} de ${questions.length} questões! Pontuação: ${(score / 3).toFixed(2)}/10`;
+      playerResults.push({
+        name: playerName,
+        correct: score / 10,
+        score: (score / 3).toFixed(2),
+        totalTime,
+        errors: questions.map((q, i) => score / 10 <= i ? q.question : null).filter(e => e)
+      });
+      localStorage.setItem('playerResults', JSON.stringify(playerResults));
+    }
+
+    function restartGame() {
+      document.getElementById('end-screen').style.display = 'none';
+      document.getElementById('player-name').value = '';
+      document.getElementById('teacher-password').value = '';
+      startGame();
+    }
+
+    function backToStart() {
+      document.getElementById('end-screen').style.display = 'none';
+      document.getElementById('quiz-screen').style.display = 'none';
+      document.getElementById('teacher-dashboard').style.display = 'none';
+      document.getElementById('game-container').style.display = 'block';
+      document.getElementById('start-screen').style.display = 'block';
+      document.getElementById('player-name').value = '';
+      document.getElementById('teacher-password').value = '';
+    }
+
+    function checkTeacherPassword() {
+      const password = document.getElementById('teacher-password').value;
+      if (password === teacherPassword) {
+        showTeacherDashboard();
+      } else {
+        alert("Senha incorreta!");
+      }
+    }
+
+    function showTeacherDashboard() {
+      document.getElementById('game-container').style.display = 'none';
+      document.getElementById('teacher-dashboard').style.display = 'block';
+      updateTeacherDashboard();
+    }
+
+    function updateTeacherDashboard() {
+      const tbody = document.getElementById('results-body');
+      tbody.innerHTML = '';
+      playerResults.forEach(result => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td class="name" ${!columnVisibility.name ? 'style="display: none;"' : ''}>${result.name}</td>
+          <td class="correct" ${!columnVisibility.correct ? 'style="display: none;"' : ''}>${result.correct}</td>
+          <td class="score" ${!columnVisibility.score ? 'style="display: none;"' : ''}>${result.score}</td>
+          <td class="time" ${!columnVisibility.time ? 'style="display: none;"' : ''}>${result.totalTime}</td>
+          <td class="errors" ${!columnVisibility.errors ? 'style="display: none;"' : ''}>${result.errors.join(', ') || 'Nenhum'}</td>
+        `;
+        tbody.appendChild(row);
+      });
+      document.querySelectorAll('th').forEach(th => {
+        th.style.display = columnVisibility[th.className] ? '' : 'none';
+      });
+    }
+
+    function toggleColumn(column) {
+      columnVisibility[column] = !columnVisibility[column];
+      updateTeacherDashboard();
+    }
+
+    function sortByScore() {
+      playerResults.sort((a, b) => b.score - a.score);
+      updateTeacherDashboard();
+    }
+  </script>
+</body>
+</html>
